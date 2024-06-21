@@ -27,8 +27,8 @@ class IMU(Input):
         gyro: np.ndarray,
         accel: np.ndarray,
         stamp: float,
-        bias_gyro_walk: np.ndarray = [0, 0, 0],
-        bias_accel_walk: np.ndarray = [0, 0, 0],
+        bias_gyro_walk: np.ndarray=None,
+        bias_accel_walk: np.ndarray=None,
         state_id: Any = None,
         covariance: np.ndarray = None,
     ):
@@ -56,17 +56,16 @@ class IMU(Input):
             accel
         ).ravel()  #:np.ndarray: Accelerometer reading
 
-        if bias_accel_walk is None:
-            bias_accel_walk = np.zeros((3, 1))
-        else:
-            #:np.ndarray: driving input for gyro bias random walk
-            self.bias_gyro_walk = np.array(bias_gyro_walk).ravel()
 
         if bias_gyro_walk is None:
-            bias_gyro_walk = np.zeros((3, 1))
-        else:
-            #:np.ndarray: driving input for accel bias random walk
-            self.bias_accel_walk = np.array(bias_accel_walk).ravel()
+            bias_gyro_walk = np.zeros(3)
+        #:np.ndarray: driving input for gyro bias random walk
+        self.bias_gyro_walk = np.array(bias_gyro_walk).ravel()
+
+        if bias_accel_walk is None:
+            bias_accel_walk = np.zeros(3)
+        #:np.ndarray: driving input for accel bias random walk
+        self.bias_accel_walk = np.array(bias_accel_walk).ravel()
 
         self.state_id = state_id  #:Any: State ID associated with the reading
 
