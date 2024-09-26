@@ -24,7 +24,7 @@ from navlie.types import (
     State,
     StateWithCovariance,
 )
-from navlie.utils import find_nearest_stamp_idx
+from navlie.utils import find_nearest_stamp_idx, state_interp
 
 
 class BatchEstimator:
@@ -92,6 +92,7 @@ class BatchEstimator:
         meas_data: List[Measurement],
         process_model: ProcessModel,
         return_opt_results: bool = False,
+        init_state_list: List[State] = None,
     ) -> List[StateWithCovariance]:
         """Creates and solves a batch problem.
 
@@ -120,6 +121,10 @@ class BatchEstimator:
         return_opt_results : bool, optional
             Flag to optionally return the results dictionary
             from the batch problem, by default False
+        init_state_list : List[State], optional
+            List of initial states to use for the batch problem.
+            If None, the process model is used to propagate the initial state.
+            Default is None.
 
         Returns
         -------
@@ -151,28 +156,31 @@ class BatchEstimator:
         # Get unique stamps
         stamps = list(np.unique(np.array(stamps)))
 
-        # Propagate states through process model to create
-        # initial estimate
-        state_list: List[State] = [None] * len(stamps)
-        state_list[0] = x0.copy()
-        input_idx = 0
-        x = x0.copy()
-        for k in range(len(stamps) - 1):
-            u = input_data[input_idx]
+        if init_state_list is None:
+            # Propagate states through process model to create
+            # initial estimate
+            state_list: List[State] = [None] * len(stamps)
+            state_list[0] = x0.copy()
+            input_idx = 0
+            x = x0.copy()
+            for k in range(len(stamps) - 1):
+                u = input_data[input_idx]
 
-            dt = stamps[k + 1] - x.stamp
-            if dt < 0:
-                raise RuntimeError("dt is negative!")
+                dt = stamps[k + 1] - x.stamp
+                if dt < 0:
+                    raise RuntimeError("dt is negative!")
 
-            x = state_list[k].copy()
-            x = process_model.evaluate(x, u, dt)
-            x.stamp = x.stamp + dt
-            state_list[k + 1] = x
+                x = state_list[k].copy()
+                x = process_model.evaluate(x, u, dt)
+                x.stamp = x.stamp + dt
+                state_list[k + 1] = x
 
-            if stamps[k + 1] < input_stamps[input_idx + 1]:
-                continue
-            else:
-                input_idx += 1
+                if stamps[k + 1] < input_stamps[input_idx + 1]:
+                    continue
+                else:
+                    input_idx += 1
+        else:
+            state_list = state_interp(stamps, init_state_list, method="linear")
 
         # Create problem and add all variables to the problem.
         problem = Problem(
