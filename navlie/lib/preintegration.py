@@ -36,9 +36,9 @@ class RelativeMotionIncrement(Input):
     @property
     def stamp(self):
         """
-        The later timestamp :math:`j` of the RMI.
+        The first timestamp :math:`i` of the RMI.
         """
-        return self.stamps[1]
+        return self.stamps[0]
 
     @abstractmethod
     def increment(self, u, dt):
