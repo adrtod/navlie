@@ -444,8 +444,8 @@ class Problem:
                     H_data.extend(jacobian.ravel())
                     row_slice = self.residual_slices[i]
                     col_slice = self.variable_slices[key]
-                    col_ind = range(col_slice.start, col_slice.stop, col_slice.step)
-                    for k in range(row_slice.start, row_slice.stop, row_slice.step):
+                    col_ind = range(col_slice.start, col_slice.stop)
+                    for k in range(row_slice.start, row_slice.stop):
                         row_ind = [k] * jacobian.shape[1]
                         H_row_ind.extend(row_ind)
                         H_col_ind.extend(col_ind)
