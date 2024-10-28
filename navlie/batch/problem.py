@@ -399,8 +399,10 @@ class Problem:
             self._compute_size_of_problem()
 
         # Initialize the error vector and Jacobian
-        e = np.zeros((self._size_errors,))
-        H = np.zeros((self._size_errors, self._size_state))
+        e = np.zeros((self._size_errors, 1))
+        H_data = []
+        H_row_ind = []
+        H_col_ind = []
         cost_list = []
 
         # For each factor, evaluate error and Jacobian
@@ -426,7 +428,7 @@ class Problem:
             weighted_error = sqrt_loss_weight * error
 
             # Place errors
-            e[self.residual_slices[i]] = weighted_error.ravel()
+            e[self.residual_slices[i],0] = weighted_error.ravel()
 
             # Compute cost
             cost = np.sum(loss.loss(u))
@@ -439,14 +441,24 @@ class Problem:
                     # Correctly weight the Jacobian
                     jacobian = sqrt_loss_weight * jacobian
 
-                    H[
-                        self.residual_slices[i], self.variable_slices[key]
-                    ] = jacobian
+                    H_data.extend(jacobian.ravel())
+                    row_slice = self.residual_slices[i]
+                    col_slice = self.variable_slices[key]
+                    col_ind = range(col_slice.start, col_slice.stop, col_slice.step)
+                    for k in range(row_slice.start, row_slice.stop, row_slice.step):
+                        row_ind = [k] * jacobian.shape[1]
+                        H_row_ind.extend(row_ind)
+                        H_col_ind.extend(col_ind)
+
+        H = sparse.csr_matrix(
+            (H_data, (H_row_ind, H_col_ind)),
+            shape=(self._size_errors, self._size_state),
+        )
 
         # Sum up costs from each residual
-        cost = np.sum(np.array(cost_list))
+        cost = np.sum(cost_list)
 
-        return e.reshape((-1, 1)), H, cost
+        return e, H, cost
 
     def _compute_size_of_problem(self) -> None:
         """Computes the total size of the problem, i.e. the number of variables
@@ -534,7 +546,7 @@ class Problem:
             var_1_slice = self.variable_slices[key_1]
             var_2_slice = self.variable_slices[key_2]
 
-            return self._covariance_matrix[var_1_slice, var_2_slice]
+            return self._covariance_matrix[var_1_slice, var_2_slice].toarray()
         except KeyError as e:
             print(f"Cannot compute covariance block!")
 
@@ -543,7 +555,7 @@ class Problem:
         try:
             self._covariance_matrix = sparse.linalg.inv(
                 self._information_matrix
-            ).toarray()
+            )
             return self._covariance_matrix
         except Exception as e:
             print("Covariance computation failed!\n{}".format(e))
