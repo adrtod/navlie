@@ -226,11 +226,9 @@ class Problem:
 
             if self.is_converged(delta_cost, cost_list[-1], dx, grad_norm):
                 break
-    
-            H_spr = sparse.csr_matrix(H)
 
-            A = H_spr.T @ H_spr
-            b = H_spr.T @ e
+            A = H.T @ H
+            b = H.T @ e
 
             delta_x = sparse.linalg.spsolve(A, -b).reshape((-1, 1))
 
@@ -286,10 +284,8 @@ class Problem:
         grad_norm = None
         cost_list = [cost]
 
-        H_spr = sparse.csr_matrix(H)
-
-        A = H_spr.T @ H_spr
-        b = H_spr.T @ e
+        A = H.T @ H
+        b = H.T @ e
 
         iter_idx = 0
         dx = 10
@@ -332,10 +328,8 @@ class Problem:
                 cost_list.append(cost)
                 prev_cost = cost
 
-                H_spr = sparse.csr_matrix(H)
-
-                A = H_spr.T @ H_spr
-                b = H_spr.T @ e
+                A = H.T @ H
+                b = H.T @ e
                 status = "Accepted."
             else:
                 mu = mu * nu
