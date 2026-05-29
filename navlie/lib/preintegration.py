@@ -169,7 +169,7 @@ class IMUIncrement(RelativeMotionIncrement):
         L_full[9:15, 6:12] = dt * np.identity(6)
 
         if not self._estimating_bias:
-            A_full = A_full[0:9, 9:9]
+            A_full = A_full[0:9, 0:9]
             L_full = L_full[0:9, 0:6]
 
         self.covariance = (
