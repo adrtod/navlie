@@ -1,13 +1,14 @@
-""" 
+"""
 Collection of miscellaneous plotting functions.
 """
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 from navlie.types import State, Measurement, StateWithCovariance
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from navlie.utils.common import GaussianResultList
+
 
 def plot_error(
     results: GaussianResultList,
@@ -238,9 +239,7 @@ def plot_meas(
         axs[i].scatter(
             y_stamps, y_meas[:, i], color="b", alpha=0.7, s=2, label="Measured"
         )
-        axs[i].plot(
-            y_stamps, y_true[:, i], color="r", alpha=1, label="Modelled"
-        )
+        axs[i].plot(y_stamps, y_true[:, i], color="r", alpha=1, label="Modelled")
         axs[i].fill_between(
             y_stamps,
             y_true[:, i] + three_sigma[:, i],
@@ -307,22 +306,177 @@ def plot_meas_by_model(
     return fig, axs
 
 
+def plot_camera_poses(
+    poses,
+    ax: plt.Axes = None,
+    color: str = "tab:blue",
+    line_thickness: float = 1,
+    step: int = 1,
+    scale: float = 0.25,
+):
+    """
+    Plots camera poses along a 3D plot.
+
+    The camera poses should be elements of SE(3), with the z-axis pointing
+    forward through the optical axis.
+
+    Parameters
+    ----------
+    poses : List[SE3State]
+        A list objects containing a ``position`` property and an attitude
+        property, representing the rotation matrix :math:``\mathbf{C}_{ab}``.
+    ax : plt.Axes, optional
+        Axes to plot on, if none, 3D axes are created.
+    color : str, optional
+        Color of the plotted camera, by default "tab:blue"
+    line_thickness : float, optional
+        Thickness of the camera line, by default 1
+    step : int, optional
+        Step size in number of poses to plot, by default 1 which plots all poses
+    scale : float, optional
+        Scale of the camera, by default 0.25
+    Returns
+    -------
+    plt.Figure
+        Handle to figure.
+    List[plt.Axes]
+        Handle to axes that were drawn on.
+    """
+    if isinstance(poses, GaussianResultList):
+        poses = poses.state
+
+    if isinstance(poses, StateWithCovariance):
+        poses = [poses.state]
+
+    if isinstance(poses, np.ndarray):
+        poses = poses.tolist()
+
+    if not isinstance(poses, list):
+        poses = [poses]
+
+    # Check if provided axes are in 3D
+    if ax is None:
+        fig = plt.figure()
+        ax = plt.axes(projection="3d")
+    else:
+        fig = ax.get_figure()
+
+    # Plot the individual camera poses
+    cam_pose_viz = CameraPoseVisualizer(
+        line_thickness=line_thickness,
+        scale=scale,
+        color=color,
+    )
+    for i in range(0, len(poses), step):
+        fig, ax = cam_pose_viz.plot_pose(poses[i].attitude, poses[i].position, ax=ax)
+
+    set_axes_equal(ax)
+    return fig, ax
+
+
+class CameraPoseVisualizer:
+    """A class to plot camera poses in 3D using matplotlib."""
+
+    def __init__(
+        self,
+        line_thickness: float = 1,
+        scale: float = 0.25,
+        color: str = "tab:blue",
+    ):
+        self.line_thickness = line_thickness
+        self.scale = scale
+        self.color = color
+
+        # Define points resolved in the camera frame
+        cam_points: List[np.ndarray] = []
+        # Image plane corners
+        cam_points.append(np.array([-1.0, -1.0, 1.0]))  # left top
+        cam_points.append(np.array([1.0, -1.0, 1.0]))  # right top
+        cam_points.append(np.array([-1.0, 1.0, 1.0]))  # left bottom
+        cam_points.append(np.array([1.0, 1.0, 1.0]))  # right bottom
+        # Optical center
+        cam_points.append(np.array([0.0, 0.0, 0.0]))
+        for point in cam_points:
+            point *= scale
+        self.cam_points = cam_points
+
+    def plot_pose(self, C: np.ndarray, r: np.ndarray, ax: plt.Axes = None):
+        """Plots a camera pose in 3D.
+
+        Plots lines representing connection between the optical center and the
+        camera corners.
+
+        Parameters
+        ----------
+        C : np.ndarray
+            Rotation matrix representing the camera attitude :math:``\mathbf{C}_{ab}``.
+        r : np.ndarray
+            Position of the camera in the inertial frame.
+
+        Returns
+        -------
+        plt.Figure
+            Handle to figure.
+        plt.Axes
+            Handle to axes that were drawn on.
+        """
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection="3d")
+        else:
+            fig = ax.get_figure()
+
+        r = r.ravel()
+        # Resolve the points in the inertial frame
+        cam_points = self.cam_points
+        inertial_points: List[np.ndarray] = []
+        for point in cam_points:
+            inertial_points.append(C @ point + r)
+
+        # Define the connections between the points
+        connections = [
+            (0, 1),
+            (2, 3),
+            (0, 2),
+            (1, 3),
+            (0, 4),
+            (1, 4),
+            (2, 4),
+            (3, 4),
+        ]
+
+        # Plot lines between each point defined in the connections list
+        for connection in connections:
+            p1 = inertial_points[connection[0]]
+            p2 = inertial_points[connection[1]]
+
+            ax.plot(
+                [p1[0], p2[0]],
+                [p1[1], p2[1]],
+                [p1[2], p2[2]],
+                linewidth=self.line_thickness,
+                color=self.color,
+            )
+        return fig, ax
+
+
 def plot_poses(
     poses,
     ax: plt.Axes = None,
-    line_color: str = None,
     triad_color: str = None,
     arrow_length: float = 1,
     step: int = 5,
     label: str = None,
     linewidth=None,
-    plot_2d: bool =False,
+    plot_2d: bool = False,
+    axes_equal=True,
+    kwargs_line: Dict[str, Any] = None,
 ):
     """
     Plots a pose trajectory, representing the attitudes by triads
     plotted along the trajectory.
 
-    The poses may be either elements of SE(2), 
+    The poses may be either elements of SE(2),
     representing planar 2D poses, or elements of SE(3), representing 3D poses.
 
     Parameters
@@ -333,8 +487,6 @@ def plot_poses(
         Can either be 2D or 3D poses.
     ax : plt.Axes, optional
         Axes to plot on, if none, 3D axes are created.
-    line_color : str, optional
-        Color of the position trajectory.
     triad_color : str, optional
         Triad color. If none are specified, defaults to RGB.
     arrow_length : int, optional
@@ -345,7 +497,15 @@ def plot_poses(
         Optional label for the triad
     plot_2d: bool, optional
         Flag to plot a 3D pose trajectory in 2D bird's eye view.
+    set_axes_equal: bool optional
+        Flag to set the axis ratio equal.
+    kwargs_line: Dict[str, Any], optional
+        Keyword arguments for the line position plot.
     """
+
+    if kwargs_line is None:
+        kwargs_line = {}
+
     if isinstance(poses, GaussianResultList):
         poses = poses.state
 
@@ -384,9 +544,20 @@ def plot_poses(
     # Plot a line for the positions
     r = np.array([pose.position for pose in poses])
     if plot_2d:
-        ax.plot(r[:, 0], r[:, 1], color=line_color, label=label)
+        ax.plot(
+            r[:, 0],
+            r[:, 1],
+            label=label,
+            **kwargs_line,
+        )
     else:
-        ax.plot3D(r[:, 0], r[:, 1], r[:, 2], color=line_color, label=label)
+        ax.plot3D(
+            r[:, 0],
+            r[:, 1],
+            r[:, 2],
+            label=label,
+            **kwargs_line,
+        )
 
     # Plot triads using quiver
     if step is not None:
@@ -395,7 +566,8 @@ def plot_poses(
         if plot_2d:
             x, y = r[:, 0], r[:, 1]
             ax.quiver(
-                x, y,
+                x,
+                y,
                 C[:, 0, 0],
                 C[:, 0, 1],
                 color=colors[0],
@@ -404,14 +576,15 @@ def plot_poses(
             )
 
             ax.quiver(
-                x, y,
+                x,
+                y,
                 C[:, 1, 0],
                 C[:, 1, 1],
                 color=colors[1],
                 scale=20.0,
                 headwidth=2,
             )
-        else: 
+        else:
             x, y, z = r[:, 0], r[:, 1], r[:, 2]
             ax.quiver(
                 x,
@@ -450,10 +623,11 @@ def plot_poses(
                 linewidths=linewidth,
             )
 
-    if plot_2d:
-        ax.axis("equal")
-    else:
-        set_axes_equal(ax)
+    if axes_equal:
+        if plot_2d:
+            ax.axis("equal")
+        else:
+            set_axes_equal(ax)
     return fig, ax
 
 
@@ -479,4 +653,3 @@ def set_axes_equal(ax: plt.Axes):
     ax.set_xlim3d([x_middle - length, x_middle + length])
     ax.set_ylim3d([y_middle - length, y_middle + length])
     ax.set_zlim3d([z_middle - length, z_middle + length])
-    

@@ -27,6 +27,8 @@ from .batch import BatchEstimator
 
 from .datagen import DataGenerator, generate_measurement
 
+from .bspline import SE3Bspline
+
 from .composite import (
     CompositeState,
     CompositeProcessModel,
@@ -58,6 +60,7 @@ from .utils.plot import (
     plot_meas,
     plot_meas_by_model,
     plot_poses,
+    plot_camera_poses,
     set_axes_equal
 )
 
